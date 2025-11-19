@@ -5,9 +5,10 @@ const BASE_URL = 'https://api.jikan.moe/v4';
 // Helper to handle API rate limits roughly
 const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
-export const getTopAnime = async (): Promise<JikanAnime[]> => {
+export const getTopAnime = async (page: number = 1): Promise<JikanAnime[]> => {
   try {
-    const response = await fetch(`${BASE_URL}/top/anime?filter=bypopularity&limit=25`);
+    await delay(350); // Rate limiting buffer
+    const response = await fetch(`${BASE_URL}/top/anime?filter=bypopularity&limit=24&page=${page}`);
     if (!response.ok) throw new Error('Network response was not ok');
     const data = await response.json();
     return data.data || [];
@@ -17,9 +18,10 @@ export const getTopAnime = async (): Promise<JikanAnime[]> => {
   }
 };
 
-export const getSeasonNow = async (): Promise<JikanAnime[]> => {
+export const getSeasonNow = async (page: number = 1): Promise<JikanAnime[]> => {
   try {
-    const response = await fetch(`${BASE_URL}/seasons/now?limit=25`);
+    await delay(350);
+    const response = await fetch(`${BASE_URL}/seasons/now?limit=24&page=${page}`);
     if (!response.ok) throw new Error('Network response was not ok');
     const data = await response.json();
     return data.data || [];
@@ -29,9 +31,25 @@ export const getSeasonNow = async (): Promise<JikanAnime[]> => {
   }
 };
 
-export const searchAnime = async (query: string): Promise<JikanAnime[]> => {
+export const getSchedule = async (day?: string, page: number = 1): Promise<JikanAnime[]> => {
   try {
-    const response = await fetch(`${BASE_URL}/anime?q=${encodeURIComponent(query)}&sfw&order_by=members&sort=desc`);
+    await delay(350);
+    const dayParam = day ? `?filter=${day}` : '';
+    // Note: Jikan Schedule endpoint pagination is tricky
+    const response = await fetch(`${BASE_URL}/schedules${dayParam}&page=${page}`);
+    if (!response.ok) throw new Error('Network response was not ok');
+    const data = await response.json();
+    return data.data || [];
+  } catch (error) {
+    console.error("API Error (Schedule):", error);
+    return [];
+  }
+};
+
+export const searchAnime = async (query: string, page: number = 1): Promise<JikanAnime[]> => {
+  try {
+    await delay(350);
+    const response = await fetch(`${BASE_URL}/anime?q=${encodeURIComponent(query)}&sfw&order_by=members&sort=desc&page=${page}&limit=24`);
     if (!response.ok) throw new Error('Network response was not ok');
     const data = await response.json();
     return data.data || [];

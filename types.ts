@@ -40,6 +40,7 @@ export interface JikanAnime {
   year?: number;
   studios: { name: string }[];
   genres: { name: string }[];
+  broadcast?: { day: string; time: string; timezone: string; string: string };
 }
 
 export interface JikanCharacter {
@@ -66,6 +67,7 @@ export interface LibraryEntry {
   anime: JikanAnime;
   status: LibraryStatus;
   progress: number;
+  totalEpisodes: number | null; 
   dateAdded: number;
 }
 
@@ -73,5 +75,42 @@ export enum AppView {
   HOME = 'HOME',
   SEARCH = 'SEARCH',
   LIBRARY = 'LIBRARY',
-  DETAILS = 'DETAILS'
+  DETAILS = 'DETAILS',
+  DOWNLOADS = 'DOWNLOADS',
+  SETTINGS = 'SETTINGS'
+}
+
+// --- Download Manager Types ---
+export interface DownloadJob {
+  id: string;
+  fileName: string;
+  url: string;
+  progress: number;
+  status: 'pending' | 'downloading' | 'completed' | 'failed' | 'paused';
+  timestamp: number;
+  thumbnail?: string;
+}
+
+// --- Filtering & Sorting Types ---
+export type SortOption = 'date_added' | 'score' | 'title' | 'progress';
+
+export interface LibraryFilter {
+  genres: string[];
+  years: number[];
+  studios: string[];
+  status?: LibraryStatus | 'All';
+}
+
+// --- Sync Types ---
+export interface MalSyncConfig {
+  username: string;
+  lastSynced: number | null;
+  autoSync: boolean;
+  isLoggedIn: boolean;
+}
+
+export interface ToastNotification {
+  id: string;
+  message: string;
+  type: 'success' | 'error' | 'info';
 }

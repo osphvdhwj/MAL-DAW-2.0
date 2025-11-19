@@ -13,11 +13,31 @@
         background-color: #000000; /* AMOLED Black */
         color: #ffffff;
         -webkit-tap-highlight-color: transparent;
+        overscroll-behavior-y: none; /* Prevent pull-to-refresh on mobile */
       }
       /* Hide scrollbar for mobile feel */
       ::-webkit-scrollbar {
         width: 0px;
         background: transparent;
+      }
+      
+      /* Skeleton Loading Animation */
+      .skeleton {
+        background: linear-gradient(90deg, #1e1e1e 25%, #2a2a2a 50%, #1e1e1e 75%);
+        background-size: 200% 100%;
+        animation: shimmer 1.5s infinite linear;
+      }
+      
+      @keyframes shimmer {
+        0% { background-position: 200% 0; }
+        100% { background-position: -200% 0; }
+      }
+
+      /* Hardware Acceleration for 120Hz smoothness */
+      .gpu-accelerated {
+        transform: translateZ(0);
+        backface-visibility: hidden;
+        perspective: 1000px;
       }
     </style>
   <script type="importmap">
