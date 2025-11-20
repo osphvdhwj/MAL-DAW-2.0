@@ -123,22 +123,38 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
            </h3>
            <div className="bg-[#1a1a1a] rounded-xl p-4 border border-gray-800">
                {syncConfig.isLoggedIn ? (
-                   <div className="flex justify-between items-center">
-                       <div>
-                           <p className="text-sm font-medium text-white flex items-center gap-2">
-                               <CheckBadgeIcon className="h-4 w-4 text-green-500" /> Synced as {syncConfig.username}
-                           </p>
-                           <p className="text-xs text-gray-500 mt-1">Last sync: {syncConfig.lastSynced ? new Date(syncConfig.lastSynced).toLocaleDateString() : 'Never'}</p>
+                   <>
+                       <div className="flex justify-between items-center">
+                           <div>
+                               <p className="text-sm font-medium text-white flex items-center gap-2">
+                                   <CheckBadgeIcon className="h-4 w-4 text-green-500" /> Synced as {syncConfig.username}
+                               </p>
+                               <p className="text-xs text-gray-500 mt-1">Last sync: {syncConfig.lastSynced ? new Date(syncConfig.lastSynced).toLocaleDateString() + ' ' + new Date(syncConfig.lastSynced).toLocaleTimeString() : 'Never'}</p>
+                           </div>
+                           <div className="flex gap-2">
+                                <button onClick={onSyncNow} disabled={isSyncing} className="p-2 bg-blue-600 rounded-lg text-white hover:bg-blue-700 shadow-lg active:scale-95 transition-transform">
+                                    <ArrowPathIcon className={`h-5 w-5 ${isSyncing ? 'animate-spin' : ''}`} />
+                                </button>
+                                <button onClick={() => onUpdateSyncConfig({...syncConfig, isLoggedIn: false, username: ''})} className="p-2 bg-red-900/50 text-red-400 rounded-lg hover:bg-red-900">
+                                    <TrashIcon className="h-5 w-5" />
+                                </button>
+                           </div>
                        </div>
-                       <div className="flex gap-2">
-                            <button onClick={onSyncNow} disabled={isSyncing} className="p-2 bg-blue-600 rounded-lg text-white hover:bg-blue-700">
-                                <ArrowPathIcon className={`h-5 w-5 ${isSyncing ? 'animate-spin' : ''}`} />
-                            </button>
-                            <button onClick={() => onUpdateSyncConfig({...syncConfig, isLoggedIn: false, username: ''})} className="p-2 bg-red-900/50 text-red-400 rounded-lg hover:bg-red-900">
-                                <TrashIcon className="h-5 w-5" />
+                       
+                       {/* Auto Sync Toggle */}
+                       <div className="mt-4 pt-4 border-t border-gray-800 flex justify-between items-center">
+                            <div>
+                                <p className="text-sm font-medium text-white">Background Auto-Sync</p>
+                                <p className="text-xs text-gray-500">Sync periodically when online</p>
+                            </div>
+                            <button 
+                                onClick={() => onUpdateSyncConfig({ ...syncConfig, autoSync: !syncConfig.autoSync })}
+                                className={`w-10 h-6 rounded-full p-1 transition-colors ${syncConfig.autoSync ? 'bg-green-500' : 'bg-gray-700'}`}
+                            >
+                                <div className={`bg-white w-4 h-4 rounded-full shadow transform transition-transform ${syncConfig.autoSync ? 'translate-x-4' : ''}`} />
                             </button>
                        </div>
-                   </div>
+                   </>
                ) : (
                    <div className="flex gap-2">
                        <input 
@@ -146,12 +162,12 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
                            value={usernameInput}
                            onChange={(e) => setUsernameInput(e.target.value)}
                            placeholder="MAL Username"
-                           className="flex-1 bg-[#111] border border-gray-700 rounded-lg px-3 py-2 text-sm text-white"
+                           className="flex-1 bg-[#111] border border-gray-700 rounded-lg px-3 py-2 text-sm text-white focus:ring-1 focus:ring-blue-500 outline-none"
                        />
                        <button 
                            onClick={() => { onUpdateSyncConfig({...syncConfig, username: usernameInput}); onSyncNow(); }}
                            disabled={isSyncing || !usernameInput}
-                           className="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-bold"
+                           className="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-bold shadow-glow-blue"
                        >
                            Login
                        </button>
@@ -227,13 +243,13 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
              <Cog6ToothIcon className="h-4 w-4" /> Preferences
            </h3>
            <div className="bg-[#1a1a1a] rounded-xl overflow-hidden border border-gray-800">
-                <div className="p-4 flex justify-between items-center border-b border-gray-800/50" onClick={() => onUpdateSettings({...settings, hapticsEnabled: !settings.hapticsEnabled})}>
+                <div className="p-4 flex justify-between items-center border-b border-gray-800/50 active:bg-[#222]" onClick={() => onUpdateSettings({...settings, hapticsEnabled: !settings.hapticsEnabled})}>
                     <span className="text-sm font-medium text-white">Haptic Feedback</span>
                     <div className={`w-10 h-6 rounded-full p-1 transition-colors ${settings.hapticsEnabled ? THEME_COLORS[settings.theme] : 'bg-gray-700'}`}>
                         <div className={`bg-white w-4 h-4 rounded-full shadow transform transition-transform ${settings.hapticsEnabled ? 'translate-x-4' : ''}`} />
                     </div>
                 </div>
-                <div className="p-4 flex justify-between items-center" onClick={() => onUpdateSettings({...settings, dataSaver: !settings.dataSaver})}>
+                <div className="p-4 flex justify-between items-center active:bg-[#222]" onClick={() => onUpdateSettings({...settings, dataSaver: !settings.dataSaver})}>
                     <span className="text-sm font-medium text-white">Data Saver Mode</span>
                     <div className={`w-10 h-6 rounded-full p-1 transition-colors ${settings.dataSaver ? THEME_COLORS[settings.theme] : 'bg-gray-700'}`}>
                         <div className={`bg-white w-4 h-4 rounded-full shadow transform transition-transform ${settings.dataSaver ? 'translate-x-4' : ''}`} />
@@ -243,7 +259,7 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
         </section>
         
         <div className="text-center text-gray-600 text-xs mt-8">
-            MAL Down v3.5.0 • Offline Edition
+            MAL Down v3.6.0 • Offline Edition
         </div>
 
       </div>

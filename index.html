@@ -2,11 +2,23 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
     <meta name="theme-color" content="#000000" />
     <meta name="description" content="Offline Anime Tracker & Downloader" />
+    
+    <!-- Android PWA Settings -->
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="application-name" content="MAL Down">
+    
+    <!-- iOS PWA Settings -->
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="MAL Down">
+    
+    <!-- Manifest -->
+    <link rel="manifest" href="/manifest.json">
+    <link rel="icon" type="image/png" href="https://cdn-icons-png.flaticon.com/512/2232/2232688.png">
+
     <title>MAL Down</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700;900&display=swap" rel="stylesheet">
@@ -16,9 +28,24 @@
         font-family: 'Roboto', sans-serif;
         background-color: #000000; /* AMOLED Black */
         color: #ffffff;
+        
+        /* Native App Feel: Disable Selection & Highlights */
         -webkit-tap-highlight-color: transparent;
+        -webkit-touch-callout: none;
+        user-select: none;
+        -webkit-user-select: none;
+        
+        /* Prevent Pull-to-Refresh on mobile */
         overscroll-behavior-y: none;
+        overflow-y: auto;
       }
+      
+      /* Allow text selection only on inputs/textareas */
+      input, textarea {
+        user-select: text;
+        -webkit-user-select: text;
+      }
+
       ::-webkit-scrollbar {
         width: 0px;
         background: transparent;
@@ -48,6 +75,20 @@
       }
       .bar-animate {
         animation: growUp 1s ease-out forwards;
+      }
+      
+      /* Safe area for mobile bottom nav */
+      .pb-safe {
+          padding-bottom: env(safe-area-inset-bottom, 20px);
+      }
+      
+      /* Hide browser UI elements if they appear */
+      .no-scrollbar::-webkit-scrollbar {
+          display: none;
+      }
+      .no-scrollbar {
+          -ms-overflow-style: none;
+          scrollbar-width: none;
       }
     </style>
   <script type="importmap">

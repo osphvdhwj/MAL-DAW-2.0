@@ -109,6 +109,7 @@ const App: React.FC = () => {
       window.addEventListener('beforeinstallprompt', (e) => {
           e.preventDefault();
           setInstallPrompt(e);
+          console.log('Install prompt captured');
       });
       
       const handleOnline = () => setIsOffline(false);
@@ -279,24 +280,38 @@ const App: React.FC = () => {
 
   // --- Sync Logic (Real) ---
 
-  const performSync = async () => {
+  const performSync = async (isBackground: boolean = false) => {
       if(!malConfig.username) return;
-      setIsSyncing(true);
+      if (!isBackground) setIsSyncing(true);
+      
       try {
           const realMalData = await getUserLibrary(malConfig.username);
           if(realMalData.length === 0) {
-              addToast('No public list found or list empty', 'error');
+              if (!isBackground) addToast('No public list found or list empty', 'error');
           } else {
               handleImportLibrary(realMalData);
               setMalConfig(prev => ({...prev, lastSynced: Date.now(), isLoggedIn: true}));
-              addToast(`Synced ${realMalData.length} items from MAL`, 'success');
+              if (!isBackground) addToast(`Synced ${realMalData.length} items from MAL`, 'success');
           }
       } catch (e) {
-          addToast('Sync failed. Check username or internet.', 'error');
+          if (!isBackground) addToast('Sync failed. Check username or internet.', 'error');
       } finally {
-          setIsSyncing(false);
+          if (!isBackground) setIsSyncing(false);
       }
   };
+
+  // Auto Sync Logic
+  useEffect(() => {
+    if (!isOffline && malConfig.autoSync && malConfig.username && malConfig.isLoggedIn) {
+        const ONE_HOUR = 60 * 60 * 1000;
+        const now = Date.now();
+        const last = malConfig.lastSynced || 0;
+        
+        if (now - last > ONE_HOUR) {
+            performSync(true);
+        }
+    }
+  }, [isOffline, malConfig.autoSync, malConfig.username, malConfig.lastSynced, malConfig.isLoggedIn]);
 
   // --- Offline Library Download Logic ---
   
@@ -409,8 +424,12 @@ const App: React.FC = () => {
           </div>
           <div className="flex gap-2">
             {installPrompt && (
-                <button onClick={handleInstall} className={`p-2 rounded-full hover:bg-gray-800 transition-colors text-${settings.theme}-500`}>
-                    <DevicePhoneMobileIcon className="h-6 w-6" />
+                <button 
+                    onClick={handleInstall} 
+                    className={`flex items-center gap-1 px-4 py-1.5 rounded-full bg-${settings.theme}-600 text-white text-xs font-bold shadow-lg animate-bounce-small hover:bg-${settings.theme}-500 transition-colors`}
+                    aria-label="Install App"
+                >
+                    <DevicePhoneMobileIcon className="h-4 w-4" /> Install App
                 </button>
             )}
             <button onClick={() => setShowDownloads(true)} className="relative p-2 rounded-full hover:bg-gray-800 transition-colors">
@@ -534,7 +553,7 @@ const App: React.FC = () => {
                 offlineProgress={offlineProgress}
                 onUpdateSettings={setSettings}
                 onUpdateSyncConfig={setMalConfig}
-                onSyncNow={performSync}
+                onSyncNow={() => performSync(false)}
                 onDownloadLibrary={handleDownloadLibrary}
                 onClearCache={() => {
                      localStorage.removeItem('maldown-library');
