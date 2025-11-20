@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">MAL Down</string>
+    <string name="search_hint">Search anime…</string>
+    <string name="home_tab">Home</string>
+    <string name="search_tab">Search</string>
+    <string name="library_tab">Library</string>
+    <string name="profile_tab">Profile</string>
+    <string name="top_rated">Top Rated</string>
+    <string name="seasonal">Seasonal</string>
+    <string name="schedule">Schedule</string>
+    <string name="random_anime">Random Anime</string>
+    <string name="add_to_library">Add to Library</string>
+    <string name="error_loading">Failed to load data</string>
+    <string name="no_results">No results found</string>
+    <string name="library_empty">Your library is empty</string>
+</resources>
