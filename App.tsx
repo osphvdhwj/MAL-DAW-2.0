@@ -1,12 +1,14 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { searchAnime, getTopAnime, getSeasonNow, getRandomAnime, getSchedule } from './services/geminiService';
-import { JikanAnime, AppView, LibraryEntry, LibraryStatus, DownloadJob, MalSyncConfig, ToastNotification } from './types';
+import { searchAnime, getTopAnime, getSeasonNow, getRandomAnime, getSchedule, getUserLibrary, prefetchAnimeData } from './services/geminiService';
+import { JikanAnime, AppView, LibraryEntry, LibraryStatus, DownloadJob, MalSyncConfig, ToastNotification, AppSettings, AppTheme, OfflineProgress } from './types';
 import { SearchBar } from './components/SearchBar';
 import { AnimeCard } from './components/AnimeCard';
 import { LibraryView } from './components/LibraryView';
 import { DetailsView } from './components/DetailsView';
 import { DownloadManager } from './components/DownloadManager';
+import { ProfileView } from './components/ProfileView';
 import { ToastContainer } from './components/Toast';
+import { EditEntryModal } from './components/EditEntryModal';
 import { 
   HomeIcon, 
   MagnifyingGlassIcon, 
@@ -14,15 +16,16 @@ import {
   FireIcon,
   CalendarIcon,
   ClockIcon,
-  Cog6ToothIcon,
-  ArrowPathIcon,
+  UserCircleIcon,
   ArrowDownTrayIcon,
-  CheckBadgeIcon
+  DevicePhoneMobileIcon,
+  SignalSlashIcon
 } from '@heroicons/react/24/outline';
 import { 
   HomeIcon as HomeIconSolid,
   MagnifyingGlassIcon as MagnifyingGlassIconSolid,
-  RectangleStackIcon as RectangleStackIconSolid
+  RectangleStackIcon as RectangleStackIconSolid,
+  UserCircleIcon as UserCircleIconSolid
 } from '@heroicons/react/24/solid';
 
 const App: React.FC = () => {
@@ -48,18 +51,31 @@ const App: React.FC = () => {
   
   const [library, setLibrary] = useState<LibraryEntry[]>([]);
   const [animeStack, setAnimeStack] = useState<JikanAnime[]>([]);
+  const [showEditModal, setShowEditModal] = useState(false);
   
   const [isLoading, setIsLoading] = useState(false);
   const [isLoadingHome, setIsLoadingHome] = useState(true);
+  const [isOffline, setIsOffline] = useState(!navigator.onLine);
+
+  // --- App Settings State ---
+  const [settings, setSettings] = useState<AppSettings>({
+      theme: 'blue',
+      hapticsEnabled: true,
+      dataSaver: false,
+      showAdult: false
+  });
 
   // --- Download Manager State ---
   const [downloads, setDownloads] = useState<DownloadJob[]>([]);
   const [showDownloads, setShowDownloads] = useState(false);
+  
+  // --- Offline Manager State ---
+  const [offlineProgress, setOfflineProgress] = useState<OfflineProgress>({ active: false, current: 0, total: 0, currentItemName: '' });
 
   // --- Settings/Sync State ---
-  const [showSettings, setShowSettings] = useState(false);
   const [malConfig, setMalConfig] = useState<MalSyncConfig>({ username: '', lastSynced: null, autoSync: false, isLoggedIn: false });
   const [isSyncing, setIsSyncing] = useState(false);
+  const [installPrompt, setInstallPrompt] = useState<any>(null);
 
   // --- Toast State ---
   const [toasts, setToasts] = useState<ToastNotification[]>([]);
@@ -77,20 +93,49 @@ const App: React.FC = () => {
 
     const savedConfig = localStorage.getItem('maldown-sync-config');
     if (savedConfig) setMalConfig(JSON.parse(savedConfig));
+
+    const savedSettings = localStorage.getItem('maldown-settings');
+    if (savedSettings) setSettings(JSON.parse(savedSettings));
   }, []);
 
   // Save Persistent Data
-  useEffect(() => {
-    localStorage.setItem('maldown-library', JSON.stringify(library));
-  }, [library]);
+  useEffect(() => { localStorage.setItem('maldown-library', JSON.stringify(library)); }, [library]);
+  useEffect(() => { localStorage.setItem('maldown-downloads', JSON.stringify(downloads)); }, [downloads]);
+  useEffect(() => { localStorage.setItem('maldown-sync-config', JSON.stringify(malConfig)); }, [malConfig]);
+  useEffect(() => { localStorage.setItem('maldown-settings', JSON.stringify(settings)); }, [settings]);
 
+  // PWA Install & Offline Logic
   useEffect(() => {
-    localStorage.setItem('maldown-downloads', JSON.stringify(downloads));
-  }, [downloads]);
+      window.addEventListener('beforeinstallprompt', (e) => {
+          e.preventDefault();
+          setInstallPrompt(e);
+      });
+      
+      const handleOnline = () => setIsOffline(false);
+      const handleOffline = () => setIsOffline(true);
+      
+      window.addEventListener('online', handleOnline);
+      window.addEventListener('offline', handleOffline);
+      
+      return () => {
+          window.removeEventListener('online', handleOnline);
+          window.removeEventListener('offline', handleOffline);
+      };
+  }, []);
 
-  useEffect(() => {
-    localStorage.setItem('maldown-sync-config', JSON.stringify(malConfig));
-  }, [malConfig]);
+  const handleInstall = () => {
+      if (installPrompt) {
+          installPrompt.prompt();
+          installPrompt.userChoice.then((choiceResult: any) => {
+              if (choiceResult.outcome === 'accepted') setInstallPrompt(null);
+          });
+      }
+  };
+
+  // Helper for Haptics
+  const triggerHaptic = () => {
+      if (settings.hapticsEnabled && navigator.vibrate) navigator.vibrate(15);
+  };
 
   // --- API Calls ---
 
@@ -103,7 +148,7 @@ const App: React.FC = () => {
           setHomeData(prev => ({ ...prev, top, seasonal: season }));
       } catch (e) {
           console.error("Failed to load home", e);
-          addToast('Failed to load anime data', 'error');
+          addToast(isOffline ? 'Offline Mode Active' : 'Failed to load data', isOffline ? 'info' : 'error');
       } finally {
           setIsLoadingHome(false);
       }
@@ -126,7 +171,7 @@ const App: React.FC = () => {
   useEffect(() => {
     const observer = new IntersectionObserver(
       entries => {
-        if (entries[0].isIntersecting && hasMore && !isFetchingMore && !isLoadingHome && view !== AppView.LIBRARY && view !== AppView.SETTINGS && view !== AppView.DOWNLOADS) {
+        if (entries[0].isIntersecting && hasMore && !isFetchingMore && !isLoadingHome && view !== AppView.LIBRARY && view !== AppView.PROFILE && view !== AppView.DOWNLOADS) {
           loadMore();
         }
       },
@@ -188,6 +233,7 @@ const App: React.FC = () => {
 
   const handleRandom = async () => {
       setIsLoading(true);
+      triggerHaptic();
       const random = await getRandomAnime();
       setIsLoading(false);
       if (random) setAnimeStack([random]);
@@ -196,30 +242,22 @@ const App: React.FC = () => {
 
   // --- Library Logic ---
 
-  const updateLibrary = (status: LibraryStatus) => {
-    const currentAnime = animeStack[animeStack.length - 1];
-    if (!currentAnime) return;
+  const handleSaveEntry = (newEntry: LibraryEntry) => {
     setLibrary(prev => {
-      const existing = prev.find(e => e.id === currentAnime.mal_id);
-      if (existing) {
-        addToast(`Updated ${currentAnime.title} to ${status}`, 'success');
-        return prev.map(e => e.id === currentAnime.mal_id ? { ...e, status } : e);
+      const exists = prev.find(e => e.id === newEntry.id);
+      if (exists) {
+        addToast(`Updated ${newEntry.anime.title}`, 'success');
+        return prev.map(e => e.id === newEntry.id ? newEntry : e);
       } else {
-        addToast(`Added ${currentAnime.title} to Library`, 'success');
-        return [...prev, {
-          id: currentAnime.mal_id,
-          anime: currentAnime,
-          status,
-          progress: 0,
-          totalEpisodes: currentAnime.episodes,
-          dateAdded: Date.now()
-        }];
+        addToast(`Added ${newEntry.anime.title}`, 'success');
+        return [...prev, newEntry];
       }
     });
   };
 
   const updateProgress = (id: number, newProgress: number) => {
     if (newProgress < 0) return;
+    triggerHaptic();
     setLibrary(prev => prev.map(entry => {
       if (entry.id === id) {
         if (entry.anime.episodes && newProgress > entry.anime.episodes) return entry;
@@ -237,6 +275,54 @@ const App: React.FC = () => {
           });
           return combined;
       });
+  };
+
+  // --- Sync Logic (Real) ---
+
+  const performSync = async () => {
+      if(!malConfig.username) return;
+      setIsSyncing(true);
+      try {
+          const realMalData = await getUserLibrary(malConfig.username);
+          if(realMalData.length === 0) {
+              addToast('No public list found or list empty', 'error');
+          } else {
+              handleImportLibrary(realMalData);
+              setMalConfig(prev => ({...prev, lastSynced: Date.now(), isLoggedIn: true}));
+              addToast(`Synced ${realMalData.length} items from MAL`, 'success');
+          }
+      } catch (e) {
+          addToast('Sync failed. Check username or internet.', 'error');
+      } finally {
+          setIsSyncing(false);
+      }
+  };
+
+  // --- Offline Library Download Logic ---
+  
+  const handleDownloadLibrary = async () => {
+      if (library.length === 0) return;
+      
+      setOfflineProgress({ active: true, current: 0, total: library.length, currentItemName: 'Starting...' });
+      
+      for (let i = 0; i < library.length; i++) {
+          const entry = library[i];
+          setOfflineProgress({ 
+              active: true, 
+              current: i + 1, 
+              total: library.length, 
+              currentItemName: entry.anime.title 
+          });
+          
+          // Prefetch all data for this entry
+          await prefetchAnimeData(entry.id);
+          
+          // Small delay to be nice to API/CPU
+          await new Promise(r => setTimeout(r, 200));
+      }
+      
+      setOfflineProgress({ active: false, current: 0, total: 0, currentItemName: '' });
+      addToast('Library available offline!', 'success');
   };
 
   // --- Download Logic ---
@@ -262,7 +348,6 @@ const App: React.FC = () => {
       setDownloads(prev => prev.map(j => j.id === id ? {...j, status: 'downloading'} : j));
   };
 
-  // Simulated Download Loop
   useEffect(() => {
       const interval = setInterval(() => {
           setDownloads(prev => prev.map(job => {
@@ -271,8 +356,6 @@ const App: React.FC = () => {
                   const newProgress = Math.min(100, job.progress + speed);
                   
                   if (newProgress >= 100) {
-                      // Complete
-                      // Trigger actual browser download
                        const a = document.createElement('a');
                        a.href = job.url;
                        a.download = job.fileName;
@@ -287,51 +370,20 @@ const App: React.FC = () => {
               return job;
           }));
       }, 200);
-      
       return () => clearInterval(interval);
   }, []);
 
-  // Download Handlers
-  const pauseDownload = (id: string) => {
-    setDownloads(prev => prev.map(j => j.id === id ? { ...j, status: 'paused' } : j));
-  };
-
-  const resumeDownload = (id: string) => {
-    setDownloads(prev => prev.map(j => j.id === id ? { ...j, status: 'downloading' } : j));
-  };
-
-  const cancelDownload = (id: string) => {
-    setDownloads(prev => prev.filter(j => j.id !== id));
-  };
-  
-  const clearHistory = () => {
-    setDownloads(prev => prev.filter(j => j.status === 'downloading' || j.status === 'paused' || j.status === 'pending'));
-  };
-
-  // --- Sync Logic ---
-  
-  const handleSync = () => {
-    if (!malConfig.username) {
-        addToast('Please enter a username', 'error');
-        return;
-    }
-    setIsSyncing(true);
-    // Simulate network request
-    setTimeout(() => {
-      setIsSyncing(false);
-      setMalConfig(prev => ({ ...prev, lastSynced: Date.now(), isLoggedIn: true }));
-      addToast('Sync complete! Library updated.', 'success');
-    }, 2500);
-  };
+  const pauseDownload = (id: string) => setDownloads(prev => prev.map(j => j.id === id ? { ...j, status: 'paused' } : j));
+  const resumeDownload = (id: string) => setDownloads(prev => prev.map(j => j.id === id ? { ...j, status: 'downloading' } : j));
+  const cancelDownload = (id: string) => setDownloads(prev => prev.filter(j => j.id !== id));
+  const clearHistory = () => setDownloads(prev => prev.filter(j => j.status === 'downloading' || j.status === 'paused' || j.status === 'pending'));
 
   // --- Toast Logic ---
   const addToast = (message: string, type: 'success' | 'error' | 'info') => {
       const id = Date.now().toString();
       setToasts(prev => [...prev, { id, message, type }]);
   };
-  const removeToast = (id: string) => {
-      setToasts(prev => prev.filter(t => t.id !== id));
-  };
+  const removeToast = (id: string) => setToasts(prev => prev.filter(t => t.id !== id));
 
   const days = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'];
 
@@ -342,79 +394,33 @@ const App: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-black text-white font-roboto">
+    <div className={`min-h-screen bg-black text-white font-roboto theme-${settings.theme}`}>
       <main className="max-w-md mx-auto min-h-screen bg-black pb-20 relative border-x border-gray-900 shadow-2xl overflow-hidden">
         
         {/* Top Bar */}
         <div className="flex justify-between items-center px-4 pt-5 pb-3 bg-black/90 backdrop-blur z-20 sticky top-0">
-          <div className="font-bold text-2xl tracking-tighter bg-clip-text text-transparent bg-gradient-to-r from-blue-400 via-purple-500 to-pink-500 animate-gradient-x">
-             MAL Down
+          <div className="flex flex-col">
+            <div className="font-bold text-2xl tracking-tighter bg-clip-text text-transparent bg-gradient-to-r from-white via-gray-200 to-gray-400">
+                MAL Down
+            </div>
+            {isOffline && (
+                <span className="text-[10px] text-red-400 flex items-center gap-1"><SignalSlashIcon className="h-3 w-3" /> Offline Mode</span>
+            )}
           </div>
           <div className="flex gap-2">
+            {installPrompt && (
+                <button onClick={handleInstall} className={`p-2 rounded-full hover:bg-gray-800 transition-colors text-${settings.theme}-500`}>
+                    <DevicePhoneMobileIcon className="h-6 w-6" />
+                </button>
+            )}
             <button onClick={() => setShowDownloads(true)} className="relative p-2 rounded-full hover:bg-gray-800 transition-colors">
                <ArrowDownTrayIcon className="h-6 w-6 text-gray-300" />
                {downloads.some(d => d.status === 'downloading') && (
-                 <span className="absolute top-2 right-2 h-2.5 w-2.5 bg-blue-500 rounded-full animate-pulse border border-black" />
-               )}
-            </button>
-            <button onClick={() => setShowSettings(true)} className="p-2 rounded-full hover:bg-gray-800 transition-colors">
-               {malConfig.isLoggedIn ? (
-                   <img 
-                    src={`https://ui-avatars.com/api/?name=${malConfig.username}&background=random`} 
-                    className="h-6 w-6 rounded-full ring-1 ring-gray-500" 
-                    alt="Profile"
-                   />
-               ) : (
-                   <Cog6ToothIcon className="h-6 w-6 text-gray-300" />
+                 <span className={`absolute top-2 right-2 h-2.5 w-2.5 bg-${settings.theme}-500 rounded-full animate-pulse border border-black`} />
                )}
             </button>
           </div>
         </div>
-
-        {/* Settings Modal */}
-        {showSettings && (
-          <div className="fixed inset-0 z-[60] bg-black/90 backdrop-blur-sm flex items-center justify-center p-4 animate-fade-in">
-             <div className="bg-[#111] w-full max-w-xs rounded-2xl p-6 border border-gray-800 shadow-2xl">
-                <div className="flex justify-between items-center mb-6">
-                    <h2 className="text-xl font-bold text-white">Sync Settings</h2>
-                    <button onClick={() => setShowSettings(false)}><CheckBadgeIcon className="h-6 w-6 text-gray-500" /></button>
-                </div>
-                
-                <div className="mb-6">
-                  <label className="block text-xs text-gray-500 mb-2 uppercase font-bold tracking-wider">MyAnimeList Username</label>
-                  <div className="relative">
-                    <input 
-                        type="text" 
-                        value={malConfig.username}
-                        onChange={(e) => setMalConfig(p => ({...p, username: e.target.value}))}
-                        className="w-full bg-black border border-gray-700 rounded-lg p-3 text-white focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none transition-all text-sm"
-                        placeholder="Enter username"
-                    />
-                  </div>
-                </div>
-
-                <div className="mb-6 bg-[#1a1a1a] p-4 rounded-xl border border-gray-800">
-                   <div className="flex justify-between items-center mb-3">
-                      <span className="text-sm font-bold text-gray-300">Library Sync</span>
-                      {malConfig.lastSynced && <span className="text-[10px] text-green-500 bg-green-900/20 px-2 py-0.5 rounded-full">Active</span>}
-                   </div>
-                   <button 
-                     onClick={handleSync}
-                     disabled={isSyncing || !malConfig.username}
-                     className={`w-full py-3 rounded-lg font-bold flex items-center justify-center gap-2 text-sm transition-all active:scale-95 ${isSyncing ? 'bg-gray-800 text-gray-500' : 'bg-gradient-to-r from-blue-600 to-blue-700 text-white shadow-lg shadow-blue-900/20'}`}
-                   >
-                     <ArrowPathIcon className={`h-5 w-5 ${isSyncing ? 'animate-spin' : ''}`} />
-                     {isSyncing ? 'Syncing Library...' : 'Sync Now'}
-                   </button>
-                   {malConfig.lastSynced && (
-                       <p className="text-[10px] text-center text-gray-600 mt-2">Last synced: {new Date(malConfig.lastSynced).toLocaleString()}</p>
-                   )}
-                </div>
-
-                <button onClick={() => setShowSettings(false)} className="w-full py-3 border border-gray-700 rounded-lg text-gray-400 text-sm font-medium hover:bg-gray-900 hover:text-white transition-colors">Close</button>
-             </div>
-          </div>
-        )}
 
         {/* Downloads Screen */}
         {showDownloads && (
@@ -430,17 +436,28 @@ const App: React.FC = () => {
           </div>
         )}
 
+        {/* Edit Entry Modal */}
+        {showEditModal && animeStack.length > 0 && (
+          <EditEntryModal 
+            anime={animeStack[animeStack.length - 1]}
+            existingEntry={library.find(e => e.id === animeStack[animeStack.length - 1].mal_id)}
+            theme={settings.theme}
+            onSave={handleSaveEntry}
+            onClose={() => setShowEditModal(false)}
+          />
+        )}
+
         {view === AppView.HOME && (
           <div className="animate-fade-in">
              {/* Home Toggle */}
              <div className="px-4 pt-2 pb-4 flex gap-2 overflow-x-auto no-scrollbar mask-image-fade-right">
-                <button onClick={() => { setHomeMode('top'); setPage(1); }} className={`flex items-center gap-2 px-4 py-2.5 rounded-full text-xs font-bold transition-all whitespace-nowrap shadow-sm ${homeMode === 'top' ? 'bg-white text-black scale-105' : 'bg-[#1e1e1e] text-gray-400 border border-gray-800'}`}>
+                <button onClick={() => { triggerHaptic(); setHomeMode('top'); setPage(1); }} className={`flex items-center gap-2 px-4 py-2.5 rounded-full text-xs font-bold transition-all whitespace-nowrap shadow-sm ${homeMode === 'top' ? 'bg-white text-black scale-105' : 'bg-[#1e1e1e] text-gray-400 border border-gray-800'}`}>
                     <FireIcon className="h-4 w-4" /> Top Rated
                 </button>
-                <button onClick={() => { setHomeMode('season'); setPage(1); }} className={`flex items-center gap-2 px-4 py-2.5 rounded-full text-xs font-bold transition-all whitespace-nowrap shadow-sm ${homeMode === 'season' ? 'bg-white text-black scale-105' : 'bg-[#1e1e1e] text-gray-400 border border-gray-800'}`}>
+                <button onClick={() => { triggerHaptic(); setHomeMode('season'); setPage(1); }} className={`flex items-center gap-2 px-4 py-2.5 rounded-full text-xs font-bold transition-all whitespace-nowrap shadow-sm ${homeMode === 'season' ? 'bg-white text-black scale-105' : 'bg-[#1e1e1e] text-gray-400 border border-gray-800'}`}>
                     <CalendarIcon className="h-4 w-4" /> Seasonal
                 </button>
-                <button onClick={() => { setHomeMode('schedule'); setPage(1); }} className={`flex items-center gap-2 px-4 py-2.5 rounded-full text-xs font-bold transition-all whitespace-nowrap shadow-sm ${homeMode === 'schedule' ? 'bg-white text-black scale-105' : 'bg-[#1e1e1e] text-gray-400 border border-gray-800'}`}>
+                <button onClick={() => { triggerHaptic(); setHomeMode('schedule'); setPage(1); }} className={`flex items-center gap-2 px-4 py-2.5 rounded-full text-xs font-bold transition-all whitespace-nowrap shadow-sm ${homeMode === 'schedule' ? 'bg-white text-black scale-105' : 'bg-[#1e1e1e] text-gray-400 border border-gray-800'}`}>
                     <ClockIcon className="h-4 w-4" /> Schedule
                 </button>
              </div>
@@ -448,7 +465,7 @@ const App: React.FC = () => {
              {homeMode === 'schedule' && (
                 <div className="px-4 pb-4 flex gap-2 overflow-x-auto no-scrollbar">
                   {days.map(day => (
-                    <button key={day} onClick={() => setSelectedDay(day)} className={`px-3 py-1.5 rounded-lg text-[10px] uppercase font-bold tracking-wide transition-colors ${selectedDay === day ? 'bg-purple-900 text-purple-100 border border-purple-500 shadow-glow-purple' : 'bg-[#1e1e1e] text-gray-500 border border-transparent'}`}>
+                    <button key={day} onClick={() => { triggerHaptic(); setSelectedDay(day); }} className={`px-3 py-1.5 rounded-lg text-[10px] uppercase font-bold tracking-wide transition-colors ${selectedDay === day ? `bg-${settings.theme}-900 text-${settings.theme}-100 border border-${settings.theme}-500` : 'bg-[#1e1e1e] text-gray-500 border border-transparent'}`}>
                       {day.slice(0,3)}
                     </button>
                   ))}
@@ -460,7 +477,7 @@ const App: React.FC = () => {
                  [1,2,3,4,5,6,7,8,9].map(i => <AnimeCard key={i} isLoading={true} />)
                ) : (
                  getDisplayList().map((anime) => (
-                     <AnimeCard key={`${anime.mal_id}-${homeMode}`} anime={anime} onClick={() => setAnimeStack(prev => [...prev, anime])} />
+                     <AnimeCard key={`${anime.mal_id}-${homeMode}`} anime={anime} onClick={() => { triggerHaptic(); setAnimeStack(prev => [...prev, anime]); }} />
                  ))
                )}
              </div>
@@ -468,7 +485,7 @@ const App: React.FC = () => {
              {/* Infinite Scroll Loader */}
              {hasMore && homeMode !== 'schedule' && (
                <div ref={observerTarget} className="h-24 flex items-center justify-center">
-                  {isFetchingMore && <div className="w-6 h-6 border-2 border-blue-500 border-t-transparent rounded-full animate-spin"></div>}
+                  {isFetchingMore && <div className={`w-6 h-6 border-2 border-${settings.theme}-500 border-t-transparent rounded-full animate-spin`}></div>}
                </div>
              )}
           </div>
@@ -485,12 +502,12 @@ const App: React.FC = () => {
             )}
             <div className="grid grid-cols-3 gap-3 px-3 pt-2 pb-8">
                {isLoading ? [1,2,3,4,5,6].map(i => <AnimeCard key={i} isLoading={true} />) : searchResults.map((anime) => (
-                 <AnimeCard key={anime.mal_id} anime={anime} onClick={() => setAnimeStack(prev => [...prev, anime])} />
+                 <AnimeCard key={anime.mal_id} anime={anime} onClick={() => { triggerHaptic(); setAnimeStack(prev => [...prev, anime]); }} />
                ))}
             </div>
             {hasMore && searchResults.length > 0 && (
                <div ref={observerTarget} className="h-24 flex items-center justify-center">
-                  {isFetchingMore && <div className="w-6 h-6 border-2 border-blue-500 border-t-transparent rounded-full animate-spin"></div>}
+                  {isFetchingMore && <div className={`w-6 h-6 border-2 border-${settings.theme}-500 border-t-transparent rounded-full animate-spin`}></div>}
                </div>
             )}
           </div>
@@ -499,7 +516,7 @@ const App: React.FC = () => {
         {view === AppView.LIBRARY && (
           <LibraryView 
             library={library} 
-            onSelectAnime={(a) => setAnimeStack(prev => [...prev, a])} 
+            onSelectAnime={(a) => { triggerHaptic(); setAnimeStack(prev => [...prev, a]); }} 
             onDeleteEntry={(id) => {
                 setLibrary(prev => prev.filter(e => e.id !== id));
                 addToast('Removed from library', 'info');
@@ -509,20 +526,43 @@ const App: React.FC = () => {
           />
         )}
 
+        {view === AppView.PROFILE && (
+            <ProfileView 
+                library={library}
+                settings={settings}
+                syncConfig={malConfig}
+                offlineProgress={offlineProgress}
+                onUpdateSettings={setSettings}
+                onUpdateSyncConfig={setMalConfig}
+                onSyncNow={performSync}
+                onDownloadLibrary={handleDownloadLibrary}
+                onClearCache={() => {
+                     localStorage.removeItem('maldown-library');
+                     localStorage.removeItem('maldown-downloads');
+                     window.location.reload();
+                 }}
+                isSyncing={isSyncing}
+            />
+        )}
+
         {/* Bottom Nav */}
         <nav className="fixed bottom-0 left-0 right-0 z-40 bg-[#050505]/95 backdrop-blur-lg border-t border-gray-900 pb-safe">
           <div className="max-w-md mx-auto flex justify-around items-center h-16 px-2">
-            <button onClick={() => setView(AppView.HOME)} className={`flex flex-col items-center justify-center w-full h-full transition-colors ${view === AppView.HOME ? 'text-blue-500' : 'text-gray-600 hover:text-gray-400'}`}>
+            <button onClick={() => { triggerHaptic(); setView(AppView.HOME); }} className={`flex flex-col items-center justify-center w-full h-full transition-colors ${view === AppView.HOME ? `text-${settings.theme}-500` : 'text-gray-600 hover:text-gray-400'}`}>
               {view === AppView.HOME ? <HomeIconSolid className="h-6 w-6 animate-bounce-small" /> : <HomeIcon className="h-6 w-6" />}
               <span className="text-[10px] mt-1 font-medium">Home</span>
             </button>
-            <button onClick={() => setView(AppView.SEARCH)} className={`flex flex-col items-center justify-center w-full h-full transition-colors ${view === AppView.SEARCH ? 'text-blue-500' : 'text-gray-600 hover:text-gray-400'}`}>
+            <button onClick={() => { triggerHaptic(); setView(AppView.SEARCH); }} className={`flex flex-col items-center justify-center w-full h-full transition-colors ${view === AppView.SEARCH ? `text-${settings.theme}-500` : 'text-gray-600 hover:text-gray-400'}`}>
               {view === AppView.SEARCH ? <MagnifyingGlassIconSolid className="h-6 w-6 animate-bounce-small" /> : <MagnifyingGlassIcon className="h-6 w-6" />}
               <span className="text-[10px] mt-1 font-medium">Search</span>
             </button>
-            <button onClick={() => setView(AppView.LIBRARY)} className={`flex flex-col items-center justify-center w-full h-full transition-colors ${view === AppView.LIBRARY ? 'text-blue-500' : 'text-gray-600 hover:text-gray-400'}`}>
+            <button onClick={() => { triggerHaptic(); setView(AppView.LIBRARY); }} className={`flex flex-col items-center justify-center w-full h-full transition-colors ${view === AppView.LIBRARY ? `text-${settings.theme}-500` : 'text-gray-600 hover:text-gray-400'}`}>
               {view === AppView.LIBRARY ? <RectangleStackIconSolid className="h-6 w-6 animate-bounce-small" /> : <RectangleStackIcon className="h-6 w-6" />}
               <span className="text-[10px] mt-1 font-medium">Library</span>
+            </button>
+            <button onClick={() => { triggerHaptic(); setView(AppView.PROFILE); }} className={`flex flex-col items-center justify-center w-full h-full transition-colors ${view === AppView.PROFILE ? `text-${settings.theme}-500` : 'text-gray-600 hover:text-gray-400'}`}>
+              {view === AppView.PROFILE ? <UserCircleIconSolid className="h-6 w-6 animate-bounce-small" /> : <UserCircleIcon className="h-6 w-6" />}
+              <span className="text-[10px] mt-1 font-medium">Profile</span>
             </button>
           </div>
         </nav>
@@ -537,8 +577,10 @@ const App: React.FC = () => {
         <DetailsView 
           anime={animeStack[animeStack.length - 1]} 
           libraryEntry={library.find(e => e.id === animeStack[animeStack.length - 1].mal_id)}
+          theme={settings.theme}
+          hapticsEnabled={settings.hapticsEnabled}
           onClose={() => setAnimeStack(prev => prev.slice(0, -1))} 
-          onUpdateLibrary={updateLibrary}
+          onEditEntry={() => setShowEditModal(true)}
           onSelectAnime={(a) => setAnimeStack(prev => [...prev, a])}
           onDownloadImage={addDownload}
         />

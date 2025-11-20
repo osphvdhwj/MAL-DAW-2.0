@@ -15,6 +15,7 @@ import {
   MagnifyingGlassIcon,
   ArrowsUpDownIcon
 } from '@heroicons/react/24/outline';
+import { StarIcon } from '@heroicons/react/24/solid';
 
 interface LibraryViewProps {
   library: LibraryEntry[];
@@ -32,7 +33,6 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
   onUpdateProgress 
 }) => {
   const [activeTab, setActiveTab] = useState<LibraryStatus | 'All'>('All');
-  const [showStats, setShowStats] = useState(false);
   const [showFilters, setShowFilters] = useState(false);
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const [searchQuery, setSearchQuery] = useState('');
@@ -95,19 +95,6 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
     return data;
   }, [library, activeTab, activeFilter, searchQuery, sortBy, sortAsc]);
 
-  const stats = useMemo(() => {
-    const counts = {
-      [LibraryStatus.WATCHING]: 0,
-      [LibraryStatus.COMPLETED]: 0,
-      [LibraryStatus.PLAN_TO_WATCH]: 0,
-      [LibraryStatus.DROPPED]: 0,
-    };
-    library.forEach(entry => {
-      if (counts[entry.status] !== undefined) counts[entry.status]++;
-    });
-    return counts;
-  }, [library]);
-
   const handleExport = () => {
       if (library.length === 0) {
           alert("Library is empty!");
@@ -155,7 +142,7 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
   const isFilterActive = activeFilter.genres.length > 0 || activeFilter.years.length > 0 || activeFilter.studios.length > 0;
 
   return (
-    <div className="w-full pb-24 min-h-screen bg-black">
+    <div className="w-full pb-24 min-h-screen bg-black animate-fade-in">
       {/* Sticky Header */}
       <div className="bg-black/90 backdrop-blur-md sticky top-0 z-20 border-b border-gray-800 shadow-xl">
         <div className="px-4 py-4 flex justify-between items-center">
@@ -176,12 +163,13 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
                 >
                     {viewMode === 'grid' ? <ListBulletIcon className="h-5 w-5" /> : <Squares2X2Icon className="h-5 w-5" />}
                 </button>
-                <button 
-                    onClick={() => setShowStats(!showStats)}
-                    className={`p-2 rounded-full active:bg-[#333] transition-colors ${showStats ? 'bg-purple-900 text-purple-200' : 'bg-[#1e1e1e] text-gray-300'}`}
-                >
-                    <ChartBarIcon className="h-5 w-5" />
+                <button onClick={handleExport} className="p-2 rounded-full bg-[#1e1e1e] text-gray-300 hover:text-yellow-500 active:bg-[#333] transition-colors">
+                   <ArrowDownTrayIcon className="h-5 w-5" />
                 </button>
+                <button onClick={() => fileInputRef.current?.click()} className="p-2 rounded-full bg-[#1e1e1e] text-gray-300 hover:text-green-500 active:bg-[#333] transition-colors">
+                   <ArrowUpTrayIcon className="h-5 w-5" />
+                </button>
+                <input type="file" ref={fileInputRef} onChange={handleFileUpload} accept=".json" className="hidden" />
             </div>
         </div>
 
@@ -203,25 +191,6 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
                 )}
             </div>
         </div>
-
-        {/* Stats Drawer */}
-        {showStats && (
-            <div className="px-4 pb-4 animate-fade-in">
-                <div className="bg-gradient-to-r from-[#111] to-[#161616] rounded-xl p-4 border border-gray-800 grid grid-cols-4 gap-2 shadow-inner">
-                   {Object.entries(stats).map(([key, val]) => (
-                       <div key={key} className="text-center flex flex-col items-center">
-                           <div className={`text-lg font-bold ${val > 0 ? 'text-white' : 'text-gray-600'}`}>{val}</div>
-                           <div className="text-[10px] text-gray-500 uppercase truncate w-full">{key}</div>
-                       </div>
-                   ))}
-                   <div className="col-span-4 flex justify-between mt-2 pt-2 border-t border-gray-800">
-                      <button onClick={handleExport} className="flex items-center gap-1 text-xs text-yellow-500 px-3 py-1 rounded hover:bg-yellow-900/20"><ArrowDownTrayIcon className="h-3 w-3" /> Backup</button>
-                      <button onClick={() => fileInputRef.current?.click()} className="flex items-center gap-1 text-xs text-green-500 px-3 py-1 rounded hover:bg-green-900/20"><ArrowUpTrayIcon className="h-3 w-3" /> Restore</button>
-                   </div>
-                </div>
-                <input type="file" ref={fileInputRef} onChange={handleFileUpload} accept=".json" className="hidden" />
-            </div>
-        )}
 
         {/* Filter Drawer */}
         {showFilters && (
@@ -349,6 +318,13 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
                             entry.status === LibraryStatus.COMPLETED ? 'bg-green-500' : 
                             entry.status === LibraryStatus.DROPPED ? 'bg-red-500' : 'bg-yellow-500'
                         }`} />
+                        
+                        {/* Score Badge if exists */}
+                        {entry.score > 0 && (
+                            <div className="absolute top-1 left-1 px-1 rounded bg-yellow-500/90 text-black text-[10px] font-bold shadow-sm flex items-center">
+                                <StarIcon className="h-2 w-2 mr-0.5" /> {entry.score}
+                            </div>
+                        )}
                     </div>
                 ) : (
                     // List View Item
@@ -369,6 +345,11 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
                                         entry.status === LibraryStatus.DROPPED ? 'bg-red-500' : 'bg-yellow-500'
                                     }`} />
                                     <p className="text-xs text-gray-500">{entry.status}</p>
+                                    {entry.score > 0 && (
+                                        <span className="text-xs text-yellow-400 flex items-center gap-1 ml-2">
+                                            <StarIcon className="h-3 w-3" /> {entry.score}
+                                        </span>
+                                    )}
                                 </div>
                             </div>
                             <div className="flex items-center justify-between mt-2">
