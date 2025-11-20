@@ -93,7 +93,7 @@ fun MainScreen(
         },
         bottomBar = {
             NavigationBar(
-                containerColor = MaterialTheme.colorScheme.surfaceContainer
+                containerColor = MaterialTheme.colorScheme.surface
             ) {
                 NavigationBarItem(
                     selected = selectedTab == 0,
@@ -514,7 +514,7 @@ fun AnimeCard(
             // Progress indicator
             if (showProgress && totalEpisodes != null && totalEpisodes > 0) {
                 LinearProgressIndicator(
-                    progress = { progress.toFloat() / totalEpisodes.toFloat() },
+                    progress = progress.toFloat() / totalEpisodes.toFloat(),
                     modifier = Modifier
                         .fillMaxWidth()
                         .align(Alignment.TopCenter)
